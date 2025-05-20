@@ -45,9 +45,44 @@ public class ShadowmapGenerator : ScriptableRendererFeature
         private Matrix4x4 CalculateLightViewMatrix()
         {
             Vector3 lightDir = m_LightDir.normalized;
-            Vector3 up = Vector3.Dot(lightDir, Vector3.up) > 0.99f ? Vector3.forward : Vector3.up;
-            Quaternion rotation = Quaternion.LookRotation(lightDir, up);
-            Matrix4x4 viewMatrix = Matrix4x4.TRS(m_LightPos, rotation, Vector3.one).inverse;
+            // 使用 Mathf.Abs 来确保在 lightDir 与 Vector3.up 近似平行或反向平行时都能正确选择辅助 up 向量
+            Vector3 up = Mathf.Abs(Vector3.Dot(lightDir, Vector3.up)) > 0.99f ? Vector3.forward : Vector3.up;
+
+            // 计算光源坐标系的三个正交轴
+            // viewRight 对应光源坐标系的 X 轴
+            Vector3 viewRight = Vector3.Cross(up, lightDir).normalized;
+            // viewUp 对应光源坐标系的 Y 轴
+            // 由于 lightDir 和 viewRight 已经是正交且归一化的，它们的叉积结果 viewUp 也会是归一化的
+            Vector3 viewUp = Vector3.Cross(lightDir, viewRight); 
+
+            // 初始化视图矩阵 (Matrix4x4 默认构造函数创建的是单位矩阵)
+            Matrix4x4 viewMatrix = new Matrix4x4();
+
+            // 设置矩阵的行
+            // 第0行：X轴基向量 和 X轴相关的平移
+            viewMatrix[0,0] = viewRight.x;
+            viewMatrix[0,1] = viewRight.y;
+            viewMatrix[0,2] = viewRight.z;
+            viewMatrix[0,3] = -Vector3.Dot(viewRight, m_LightPos);
+
+            // 第1行：Y轴基向量 和 Y轴相关的平移
+            viewMatrix[1,0] = viewUp.x;
+            viewMatrix[1,1] = viewUp.y;
+            viewMatrix[1,2] = viewUp.z;
+            viewMatrix[1,3] = -Vector3.Dot(viewUp, m_LightPos);
+
+            // 第2行：Z轴基向量（即光源的观察方向）和 Z轴相关的平移
+            viewMatrix[2,0] = lightDir.x;
+            viewMatrix[2,1] = lightDir.y;
+            viewMatrix[2,2] = lightDir.z;
+            viewMatrix[2,3] = -Vector3.Dot(lightDir, m_LightPos);
+
+            // 第3行：标准齐次坐标行
+            viewMatrix[3,0] = 0.0f;
+            viewMatrix[3,1] = 0.0f;
+            viewMatrix[3,2] = 0.0f;
+            viewMatrix[3,3] = 1.0f;
+            
             return viewMatrix;
         }
         
