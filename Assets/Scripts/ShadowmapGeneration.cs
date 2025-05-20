@@ -39,40 +39,70 @@ public class ShadowmapGenerator : ScriptableRendererFeature
         {
         }
 
-        // Here you can implement the rendering logic.
-        // Use <c>ScriptableRenderContext</c> to issue drawing commands or execute command buffers
-        // https://docs.unity3d.com/ScriptReference/Rendering.ScriptableRenderContext.html
-        // You don't have to call ScriptableRenderContext.submit, the render pipeline will call it at specific points in the pipeline.
-        // 手动计算View矩阵
+        // 计算光源视图矩阵
         private Matrix4x4 CalculateLightViewMatrix()
         {
+            // 确保光源方向是单位向量
             Vector3 lightDir = m_LightDir.normalized;
-            Vector3 lightUp = Vector3.Dot(lightDir, Vector3.up) > 0.99f ? Vector3.forward : Vector3.up;
-            return Matrix4x4.TRS(m_LightPos, Quaternion.LookRotation(lightDir, lightUp), Vector3.one).inverse;
+            
+            // 创建一个向上的向量，通常选择世界坐标系的上方向
+            Vector3 upVector = Vector3.up;
+            
+            // 如果光源方向接近上方向，使用前方向作为辅助向量
+            if (Mathf.Abs(Vector3.Dot(lightDir, upVector)) > 0.99f)
+            {
+                upVector = Vector3.forward;
+            }
+            
+            // 计算右向量和修正后的上向量来创建正交基
+            Vector3 rightVector = Vector3.Cross(upVector, lightDir).normalized;
+            Vector3 adjustedUpVector = Vector3.Cross(lightDir, rightVector);
+            
+            // 构建光源的朝向矩阵
+            Matrix4x4 rotationMatrix = new Matrix4x4();
+            rotationMatrix.SetColumn(0, rightVector);
+            rotationMatrix.SetColumn(1, adjustedUpVector);
+            rotationMatrix.SetColumn(2, lightDir);
+            rotationMatrix.SetColumn(3, new Vector4(0, 0, 0, 1));
+            
+            // 构建光源的位置矩阵
+            Matrix4x4 positionMatrix = Matrix4x4.TRS(m_LightPos, Quaternion.identity, Vector3.one);
+            
+            // 计算视图矩阵 (先旋转后平移的逆矩阵)
+            Matrix4x4 viewMatrix = rotationMatrix.transpose;
+            viewMatrix.SetColumn(3, new Vector4(-Vector3.Dot(rightVector, m_LightPos), 
+                                               -Vector3.Dot(adjustedUpVector, m_LightPos), 
+                                               -Vector3.Dot(lightDir, m_LightPos), 1));
+            
+            return viewMatrix;
         }
 
-        // 手动计算Projection矩阵
+        // 计算光源投影矩阵
         private Matrix4x4 CalculateLightProjectionMatrix()
         {
-            float halfSize = m_OrthoSize * 0.5f;
-            Matrix4x4 proj = Matrix4x4.Ortho(-halfSize, halfSize, -halfSize, halfSize, m_NearPlane, m_FarPlane);
-
-            // 处理反转ZBuffer
+            // 创建正交投影矩阵
+            Matrix4x4 projMatrix = Matrix4x4.Ortho(-m_OrthoSize, m_OrthoSize, 
+                                                  -m_OrthoSize, m_OrthoSize, 
+                                                  m_NearPlane, m_FarPlane);
+            
+            // 考虑反向Z缓冲区
             if (SystemInfo.usesReversedZBuffer)
             {
-                proj[2, 2] = -1.0f;
-                proj[2, 3] = -m_NearPlane;
+                // 反转近远平面
+                projMatrix.m22 = -projMatrix.m22;
+                projMatrix.m23 = -projMatrix.m23;
             }
-
-            // 处理UV起点
+            
+            // 考虑UV坐标系起点
             if (SystemInfo.graphicsUVStartsAtTop)
             {
-                proj[1, 1] = -proj[1, 1];
+                // 对Y轴进行翻转
+                projMatrix.m11 = -projMatrix.m11;
             }
-
-            return proj;
+            
+            return projMatrix;
         }
-
+        
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
             // 计算光源VP矩阵
@@ -153,8 +183,10 @@ public class ShadowmapGenerator : ScriptableRendererFeature
             
             // 设置光源参数
             m_ShadowmapRenderPass.SetLightParameters(
-                Vector3.down,
-                new Vector3(0,0.5f,0),
+                // Vector3.down,
+                // new Vector3(0,-0.5f,0),
+                lightDir,
+                lightPos,
                 0.1f,  // nearPlane
                 100f,    // farPlane
                 15f      // orthoSize
