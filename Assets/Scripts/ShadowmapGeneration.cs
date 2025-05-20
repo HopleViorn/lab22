@@ -8,13 +8,22 @@ public class ShadowmapGenerator : ScriptableRendererFeature
     class CustomRenderPass : ScriptableRenderPass
     {
         // 光源参数
-        private Vector3 m_LightDir = Vector3.down;
-        private Vector3 m_LightPos = Vector3.zero;
-        private float m_NearPlane = 0.1f;
-        private float m_FarPlane = 100f;
-        private float m_OrthoSize = 50f;
+        private Vector3 m_LightDir;
+        private Vector3 m_LightPos;
+        private float m_NearPlane;
+        private float m_FarPlane;
+        private float m_OrthoSize;
 
         private RTHandle m_ShadowmapTexHandle; // Shadowmap指针
+
+        public void SetLightParameters(Vector3 lightDir, Vector3 lightPos, float nearPlane, float farPlane, float orthoSize)
+        {
+            m_LightDir = lightDir;
+            m_LightPos = lightPos;
+            m_NearPlane = nearPlane;
+            m_FarPlane = farPlane;
+            m_OrthoSize = orthoSize;
+        }
         public void SetRTHandles(ref RTHandle tex)
         {
         m_ShadowmapTexHandle = tex;
@@ -135,6 +144,24 @@ public class ShadowmapGenerator : ScriptableRendererFeature
     // This method is called when setting up the renderer once per-camera.
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
     {
+        // 获取主光源信息
+        if (renderingData.lightData.mainLightIndex >= 0)
+        {
+            var mainLight = renderingData.lightData.visibleLights[renderingData.lightData.mainLightIndex];
+            Vector3 lightDir = -mainLight.localToWorldMatrix.GetColumn(2);
+            Vector3 lightPos = mainLight.localToWorldMatrix.GetColumn(3);
+            
+            // 设置光源参数
+            m_ShadowmapRenderPass.SetLightParameters(
+                Vector3.down,
+                new Vector3(0,0.5f,0),
+                0.1f,  // nearPlane
+                100f,    // farPlane
+                15f      // orthoSize
+            );
+        }
+
         renderer.EnqueuePass(m_ShadowmapRenderPass);
     }
 }
+
