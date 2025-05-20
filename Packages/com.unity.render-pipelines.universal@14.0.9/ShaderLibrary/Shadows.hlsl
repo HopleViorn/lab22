@@ -7,6 +7,8 @@
 #include "Core.hlsl"
 #include "Shadows.deprecated.hlsl"
 
+#include "Assets/Shaders/CustomShadow.hlsl"
+
 #define MAX_SHADOW_CASCADES 4
 
 #if !defined(_RECEIVE_SHADOWS_OFF)
@@ -420,7 +422,12 @@ half BakedShadow(half4 shadowMask, half4 occlusionProbeChannels)
 
 half MainLightShadow(float4 shadowCoord, float3 positionWS, half4 shadowMask, half4 occlusionProbeChannels)
 {
+#define _CUSTOM_SHADOW_ON
+#ifdef _CUSTOM_SHADOW_ON
+    half realtimeShadow = CustomShadow(positionWS);
+#else
     half realtimeShadow = MainLightRealtimeShadow(shadowCoord);
+#endif
 
 #ifdef CALCULATE_BAKED_SHADOWS
     half bakedShadow = BakedShadow(shadowMask, occlusionProbeChannels);

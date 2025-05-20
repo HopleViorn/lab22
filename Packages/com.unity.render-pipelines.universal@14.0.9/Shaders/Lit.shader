@@ -173,6 +173,18 @@ Shader "Universal Render Pipeline/Lit"
 
         Pass
         {
+            Name "ForwardLit"
+            Tags
+            {
+                "LightMode" = "UniversalForward"
+            }
+            HLSLPROGRAM
+            #pragma multi_compile _ _CUSTOM_SHADOW_ON
+            ENDHLSL
+        }
+
+        Pass
+        {
             Name "ShadowCaster"
             Tags
             {
@@ -284,7 +296,9 @@ Shader "Universal Render Pipeline/Lit"
             v2f ShadowPassVertex (appdata v)
             {
                 v2f o;
-                float3 positionWS = TransformObjectToWorld(v.vertex.xyz);
+                // 将顶点位置从对象空间转换到世界空间
+                float3 positionWS = mul(unity_ObjectToWorld, v.vertex).xyz;
+                // 使用自定义光源VP矩阵转换到裁剪空间
                 o.positionCS = mul(_LightVPMatrix, float4(positionWS, 1.0));
                 return o;
             }

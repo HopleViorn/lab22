@@ -15,6 +15,8 @@ public class ShadowmapGenerator : ScriptableRendererFeature
         private float m_OrthoSize;
 
         private RTHandle m_ShadowmapTexHandle; // Shadowmap指针
+        private const string shadowKeyWord = "_CUSTOM_SHADOW_ON";
+
 
         public void SetLightParameters(Vector3 lightDir, Vector3 lightPos, float nearPlane, float farPlane, float orthoSize)
         {
@@ -45,43 +47,43 @@ public class ShadowmapGenerator : ScriptableRendererFeature
             // 光源看向的方向
             Vector3 lookAt = m_LightPos + m_LightDir;
             
-            // 创建视图矩阵
-            Matrix4x4 viewMatrix = Matrix4x4.LookAt(m_LightPos, lookAt, Vector3.up);
-            
-            // 考虑UV坐标系起点
-            if (SystemInfo.graphicsUVStartsAtTop)
-            {
-                // 对Y轴进行翻转
-                viewMatrix.m11 = -viewMatrix.m11;
-                viewMatrix.m12 = -viewMatrix.m12;
-                viewMatrix.m13 = -viewMatrix.m13;
-            }
-            
-            return viewMatrix;
+            // 创建视图矩阵 (光源空间)
+            return Matrix4x4.LookAt(
+                m_LightPos,    // 相机位置 (光源位置)
+                lookAt,       // 看向的点
+                Vector3.up    // 上方向 (使用世界空间上方向)
+            );
+
         }
 
         // 计算光源投影矩阵
         private Matrix4x4 CalculateLightProjectionMatrix()
         {
             // 创建正交投影矩阵
-            Matrix4x4 projMatrix = Matrix4x4.Ortho(-m_OrthoSize, m_OrthoSize, 
-                                                  -m_OrthoSize, m_OrthoSize, 
-                                                  m_NearPlane, m_FarPlane);
+            float halfSize = m_OrthoSize;
             
-            // 考虑反向Z缓冲区
+            // 处理反向Z缓冲区
+            float near = m_NearPlane;
+            float far = m_FarPlane;
             if (SystemInfo.usesReversedZBuffer)
             {
-                // 反转近远平面
-                projMatrix.m22 = -projMatrix.m22;
-                projMatrix.m23 = -projMatrix.m23;
+                // 反转近远平面值
+                near = m_FarPlane;
+                far = m_NearPlane;
             }
             
-            // 考虑UV坐标系起点
-            if (SystemInfo.graphicsUVStartsAtTop)
-            {
-                // 对Y轴进行翻转
-                projMatrix.m11 = -projMatrix.m11;
-            }
+            Matrix4x4 projMatrix = Matrix4x4.Ortho(
+                -halfSize, halfSize,  // 左右边界
+                -halfSize, halfSize,  // 上下边界
+                near,                 // 近平面 (已考虑反向Z)
+                far                   // 远平面 (已考虑反向Z)
+            );
+
+            // 使用 GL.GetGPUProjectionMatrix 来确保投影矩阵适用于当前图形API和渲染到纹理的约定。
+            // 这会处理Y轴翻转 (当 SystemInfo.graphicsUVStartsAtTop 为 true 且渲染到纹理时，
+            // 例如在DirectX上) 和Z深度范围等问题。
+            // 'true' 参数表示我们正在渲染到纹理 (此例中是 Shadowmap)。
+            // projMatrix = GL.GetGPUProjectionMatrix(projMatrix, true);
             
             return projMatrix;
         }
@@ -93,7 +95,22 @@ public class ShadowmapGenerator : ScriptableRendererFeature
             Matrix4x4 projMatrix = CalculateLightProjectionMatrix();
             Matrix4x4 vpMatrix = projMatrix * viewMatrix;
 
+
+
+
+            // 调试VP矩阵
+            // Debug.Log($"View Matrix:\n{viewMatrix}");
+            // Debug.Log($"Projection Matrix:\n{projMatrix}");
+            // Debug.Log($"VP Matrix:\n{vpMatrix}");
+            
+            // // 检查光源参数
+            // Debug.Log($"Light Position: {m_LightPos}, Light Direction: {m_LightDir}");
+            // Debug.Log($"Ortho Size: {m_OrthoSize}, Near: {m_NearPlane}, Far: {m_FarPlane}");
+
+
             CommandBuffer cmd = CommandBufferPool.Get("Shadowmap Generation");
+            
+            cmd.EnableShaderKeyword(shadowKeyWord);
 
             // 1. 设置渲染目标为我们的阴影贴图
             cmd.SetRenderTarget(m_ShadowmapTexHandle);
@@ -117,11 +134,9 @@ public class ShadowmapGenerator : ScriptableRendererFeature
             context.DrawRenderers(renderingData.cullResults, ref drawSettings, ref filterSettings);
 
             // 7. 将生成的阴影图设置为全局纹理，以便其他Shader可以访问
-            // k_ShadowmapTexName 应该是 "_ShadowMap"
             cmd.SetGlobalTexture(k_ShadowmapTexName, m_ShadowmapTexHandle);
             context.ExecuteCommandBuffer(cmd); // 执行设置全局纹理的命令
             cmd.Clear();
-
 
             CommandBufferPool.Release(cmd);
         }
@@ -161,7 +176,7 @@ public class ShadowmapGenerator : ScriptableRendererFeature
         if (renderingData.lightData.mainLightIndex >= 0)
         {
             var mainLight = renderingData.lightData.visibleLights[renderingData.lightData.mainLightIndex];
-            Vector3 lightDir = -mainLight.localToWorldMatrix.GetColumn(2);
+            Vector3 lightDir = mainLight.localToWorldMatrix.GetColumn(2);
             Vector3 lightPos = mainLight.localToWorldMatrix.GetColumn(3);
             
             // 设置光源参数
@@ -170,13 +185,14 @@ public class ShadowmapGenerator : ScriptableRendererFeature
                 // new Vector3(0,-0.5f,0),
                 lightDir,
                 lightPos,
-                0.1f,  // nearPlane
-                100f,    // farPlane
-                15f      // orthoSize
+                0.01f,  // nearPlane
+                15f,    // farPlane
+                6f      // orthoSize
             );
         }
 
         renderer.EnqueuePass(m_ShadowmapRenderPass);
     }
 }
+
 

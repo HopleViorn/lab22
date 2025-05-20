@@ -703,8 +703,18 @@ Shader "Hidden/Universal Render Pipeline/StencilDeferred"
             //#pragma enable_d3d11_debug_symbols
 
             ENDHLSL
+            }
+    
+            // 8 - Deferred Directional Light (Lit) with custom shadow
+            Pass
+            {
+                Name "Deferred Directional Light (Lit)"
+                
+                HLSLPROGRAM
+                #pragma multi_compile _ _CUSTOM_SHADOW_ON
+                ENDHLSL
+            }
         }
-    }
-
-    FallBack "Hidden/Universal Render Pipeline/FallbackError"
+    
+        FallBack "Hidden/Universal Render Pipeline/FallbackError"
 }
