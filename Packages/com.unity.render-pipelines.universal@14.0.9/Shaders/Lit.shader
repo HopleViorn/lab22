@@ -283,6 +283,7 @@ Shader "Universal Render Pipeline/Lit"
 
             // 定义从C#脚本传入的光源VP矩阵
             float4x4 _LightVPMatrix;
+            float _CustomShadowBias; // 添加自定义阴影偏移参数
 
             // 顶点着色器输入结构
             struct appdata
@@ -298,6 +299,13 @@ Shader "Universal Render Pipeline/Lit"
                 v2f o;
                 // 将顶点位置从对象空间转换到世界空间
                 float3 positionWS = mul(unity_ObjectToWorld, v.vertex).xyz;
+                
+                // 计算光源位置（从VP矩阵的第三行提取）
+                float3 lightDirWS = normalize(_LightVPMatrix[2].xyz);
+                
+                // 沿光源方向应用偏移（使用负值表示朝光源方向）
+                // positionWS += lightDirWS * -0。77 ;
+                
                 // 使用自定义光源VP矩阵转换到裁剪空间
                 o.positionCS = mul(_LightVPMatrix, float4(positionWS, 1.0));
                 return o;
