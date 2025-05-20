@@ -42,37 +42,20 @@ public class ShadowmapGenerator : ScriptableRendererFeature
         // 计算光源视图矩阵
         private Matrix4x4 CalculateLightViewMatrix()
         {
-            // 确保光源方向是单位向量
-            Vector3 lightDir = m_LightDir.normalized;
+            // 光源看向的方向
+            Vector3 lookAt = m_LightPos + m_LightDir;
             
-            // 创建一个向上的向量，通常选择世界坐标系的上方向
-            Vector3 upVector = Vector3.up;
+            // 创建视图矩阵
+            Matrix4x4 viewMatrix = Matrix4x4.LookAt(m_LightPos, lookAt, Vector3.up);
             
-            // 如果光源方向接近上方向，使用前方向作为辅助向量
-            if (Mathf.Abs(Vector3.Dot(lightDir, upVector)) > 0.99f)
+            // 考虑UV坐标系起点
+            if (SystemInfo.graphicsUVStartsAtTop)
             {
-                upVector = Vector3.forward;
+                // 对Y轴进行翻转
+                viewMatrix.m11 = -viewMatrix.m11;
+                viewMatrix.m12 = -viewMatrix.m12;
+                viewMatrix.m13 = -viewMatrix.m13;
             }
-            
-            // 计算右向量和修正后的上向量来创建正交基
-            Vector3 rightVector = Vector3.Cross(upVector, lightDir).normalized;
-            Vector3 adjustedUpVector = Vector3.Cross(lightDir, rightVector);
-            
-            // 构建光源的朝向矩阵
-            Matrix4x4 rotationMatrix = new Matrix4x4();
-            rotationMatrix.SetColumn(0, rightVector);
-            rotationMatrix.SetColumn(1, adjustedUpVector);
-            rotationMatrix.SetColumn(2, lightDir);
-            rotationMatrix.SetColumn(3, new Vector4(0, 0, 0, 1));
-            
-            // 构建光源的位置矩阵
-            Matrix4x4 positionMatrix = Matrix4x4.TRS(m_LightPos, Quaternion.identity, Vector3.one);
-            
-            // 计算视图矩阵 (先旋转后平移的逆矩阵)
-            Matrix4x4 viewMatrix = rotationMatrix.transpose;
-            viewMatrix.SetColumn(3, new Vector4(-Vector3.Dot(rightVector, m_LightPos), 
-                                               -Vector3.Dot(adjustedUpVector, m_LightPos), 
-                                               -Vector3.Dot(lightDir, m_LightPos), 1));
             
             return viewMatrix;
         }
