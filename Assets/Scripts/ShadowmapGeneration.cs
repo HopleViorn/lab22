@@ -88,7 +88,34 @@ public class ShadowmapGenerator : ScriptableRendererFeature
         
         private Matrix4x4 CalculateLightProjectionMatrix()
         {
-            Matrix4x4 projectionMatrix = Matrix4x4.Ortho(-m_OrthoSize, m_OrthoSize, -m_OrthoSize, m_OrthoSize, m_NearPlane, m_FarPlane);
+            Matrix4x4 projectionMatrix;
+
+            // If m_OrthoSize is 0, then left == right and bottom == top.
+            if (m_OrthoSize == 0.0f || m_NearPlane == m_FarPlane)
+            {
+                projectionMatrix = Matrix4x4.zero;
+            }
+            else
+            {
+                // Initialize to zero matrix and set non-zero elements.
+                projectionMatrix = Matrix4x4.zero;
+
+                float invOrthoSize = 1.0f / m_OrthoSize;
+                float farMinusNear = m_FarPlane - m_NearPlane;
+                // farMinusNear cannot be zero here due to the check above.
+
+                projectionMatrix[0,0] = invOrthoSize;
+                // projectionMatrix[0,3] is 0 because (m_OrthoSize + (-m_OrthoSize)) is 0.
+
+                projectionMatrix[1,1] = invOrthoSize;
+                // projectionMatrix[1,3] is 0 because (m_OrthoSize + (-m_OrthoSize)) is 0.
+                
+                projectionMatrix[2,2] = -2.0f / farMinusNear;
+                projectionMatrix[2,3] = -(m_FarPlane + m_NearPlane) / farMinusNear;
+                
+                projectionMatrix[3,3] = 1.0f;
+            }
+            
             return projectionMatrix;
         }
         
